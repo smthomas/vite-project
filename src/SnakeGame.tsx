@@ -11,6 +11,9 @@ const SPEED_INCREMENT = 5;
 const SnakeGame: React.FC = () => {
   const [snake, setSnake] = useState<Position[]>([{ x: 10, y: 10 }]);
   const [food, setFood] = useState<Position>({ x: 15, y: 15 });
+  const [powerUp, setPowerUp] = useState<Position | null>(null);
+  const [isInvincible, setIsInvincible] = useState(false);
+  const [invincibilityTimer, setInvincibilityTimer] = useState(0);
   const [bombs, setBombs] = useState<Position[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
@@ -19,34 +22,33 @@ const SnakeGame: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
 
-  const generateRandomFood = useCallback((): Position => {
-    let newFood: Position;
+  const generateRandomPosition = useCallback((excludePositions: Position[]): Position => {
+    let newPosition: Position;
     do {
-      newFood = {
+      newPosition = {
         x: Math.floor(Math.random() * GRID_SIZE),
         y: Math.floor(Math.random() * GRID_SIZE),
       };
-    } while (
-      snake.some(segment => segment.x === newFood.x && segment.y === newFood.y) ||
-      bombs.some(bomb => bomb.x === newFood.x && bomb.y === newFood.y)
-    );
-    return newFood;
-  }, [snake, bombs]);
+    } while (excludePositions.some(pos => pos.x === newPosition.x && pos.y === newPosition.y));
+    return newPosition;
+  }, []);
+
+  const generateRandomFood = useCallback((): Position => {
+    const excludePositions = [...snake, ...bombs];
+    if (powerUp) excludePositions.push(powerUp);
+    return generateRandomPosition(excludePositions);
+  }, [snake, powerUp, bombs, generateRandomPosition]);
+
+  const generateRandomPowerUp = useCallback((): Position => {
+    const excludePositions = [...snake, food, ...bombs];
+    return generateRandomPosition(excludePositions);
+  }, [snake, food, bombs, generateRandomPosition]);
 
   const generateRandomBomb = useCallback((): Position => {
-    let newBomb: Position;
-    do {
-      newBomb = {
-        x: Math.floor(Math.random() * GRID_SIZE),
-        y: Math.floor(Math.random() * GRID_SIZE),
-      };
-    } while (
-      snake.some(segment => segment.x === newBomb.x && segment.y === newBomb.y) ||
-      (food.x === newBomb.x && food.y === newBomb.y) ||
-      bombs.some(bomb => bomb.x === newBomb.x && bomb.y === newBomb.y)
-    );
-    return newBomb;
-  }, [snake, food, bombs]);
+    const excludePositions = [...snake, food, ...bombs];
+    if (powerUp) excludePositions.push(powerUp);
+    return generateRandomPosition(excludePositions);
+  }, [snake, food, bombs, powerUp, generateRandomPosition]);
 
   const moveSnake = useCallback(() => {
     if (gameOver || isPaused || !hasStarted) return;
@@ -76,16 +78,24 @@ const SnakeGame: React.FC = () => {
         return currentSnake;
       }
 
-      // Check self collision
-      if (newSnake.some(segment => segment.x === head.x && segment.y === head.y)) {
+      // Check self collision (only if not invincible)
+      if (!isInvincible && newSnake.some(segment => segment.x === head.x && segment.y === head.y)) {
         setGameOver(true);
         return currentSnake;
       }
 
       // Check bomb collision
-      if (bombs.some(bomb => bomb.x === head.x && bomb.y === head.y)) {
-        setGameOver(true);
-        return currentSnake;
+      const collidedBombIndex = bombs.findIndex(bomb => bomb.x === head.x && bomb.y === head.y);
+      if (collidedBombIndex !== -1) {
+        if (isInvincible) {
+          // When invincible, collect bomb for bonus points
+          setScore(prevScore => prevScore + 5);
+          setBombs(prevBombs => prevBombs.filter((_, index) => index !== collidedBombIndex));
+        } else {
+          // When not invincible, game over
+          setGameOver(true);
+          return currentSnake;
+        }
       }
 
       newSnake.unshift(head);
@@ -94,6 +104,11 @@ const SnakeGame: React.FC = () => {
       if (head.x === food.x && head.y === food.y) {
         setScore(prevScore => prevScore + 10);
         setFood(generateRandomFood());
+        
+        // Spawn power-up randomly (20% chance)
+        if (!powerUp && Math.random() < 0.2) {
+          setPowerUp(generateRandomPowerUp());
+        }
         
         // Add a new bomb every 30 points
         if ((score + 10) % 30 === 0) {
@@ -108,9 +123,16 @@ const SnakeGame: React.FC = () => {
         newSnake.pop();
       }
 
+      // Check power-up collision
+      if (powerUp && head.x === powerUp.x && head.y === powerUp.y) {
+        setPowerUp(null);
+        setIsInvincible(true);
+        setInvincibilityTimer(5);
+      }
+
       return newSnake;
     });
-  }, [direction, food, gameOver, isPaused, hasStarted, score, generateRandomFood, generateRandomBomb, bombs]);
+  }, [direction, food, powerUp, gameOver, isPaused, hasStarted, score, isInvincible, generateRandomFood, generateRandomPowerUp, generateRandomBomb, bombs]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -127,15 +149,19 @@ const SnakeGame: React.FC = () => {
 
       switch (e.key) {
         case 'ArrowUp':
+          e.preventDefault();
           if (direction !== 'DOWN') setDirection('UP');
           break;
         case 'ArrowDown':
+          e.preventDefault();
           if (direction !== 'UP') setDirection('DOWN');
           break;
         case 'ArrowLeft':
+          e.preventDefault();
           if (direction !== 'RIGHT') setDirection('LEFT');
           break;
         case 'ArrowRight':
+          e.preventDefault();
           if (direction !== 'LEFT') setDirection('RIGHT');
           break;
       }
@@ -150,9 +176,24 @@ const SnakeGame: React.FC = () => {
     return () => clearInterval(gameInterval);
   }, [moveSnake, speed]);
 
+  // Handle invincibility timer
+  useEffect(() => {
+    if (invincibilityTimer > 0) {
+      const timer = setTimeout(() => {
+        setInvincibilityTimer(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (invincibilityTimer === 0 && isInvincible) {
+      setIsInvincible(false);
+    }
+  }, [invincibilityTimer, isInvincible]);
+
   const resetGame = () => {
     setSnake([{ x: 10, y: 10 }]);
     setFood({ x: 15, y: 15 });
+    setPowerUp(null);
+    setIsInvincible(false);
+    setInvincibilityTimer(0);
     setBombs([]);
     setDirection('RIGHT');
     setGameOver(false);
@@ -169,6 +210,7 @@ const SnakeGame: React.FC = () => {
         <div className="game-stats">
           <span className="score">Score: {score}</span>
           <span className="level">Level: {Math.floor(score / 50) + 1}</span>
+          {isInvincible && <span className="invincible-timer">Invincible: {invincibilityTimer}s</span>}
         </div>
       </div>
       
@@ -179,12 +221,13 @@ const SnakeGame: React.FC = () => {
               const isSnakeHead = snake[0].x === col && snake[0].y === row;
               const isSnakeBody = snake.slice(1).some(segment => segment.x === col && segment.y === row);
               const isFood = food.x === col && food.y === row;
+              const isPowerUp = powerUp && powerUp.x === col && powerUp.y === row;
               const isBomb = bombs.some(bomb => bomb.x === col && bomb.y === row);
               
               return (
                 <div
                   key={`${row}-${col}`}
-                  className={`cell ${isSnakeHead ? 'snake-head' : ''} ${isSnakeBody ? 'snake-body' : ''} ${isFood ? 'food' : ''} ${isBomb ? 'bomb' : ''}`}
+                  className={`cell ${isSnakeHead ? `snake-head ${isInvincible ? 'invincible' : ''}` : ''} ${isSnakeBody ? `snake-body ${isInvincible ? 'invincible' : ''}` : ''} ${isFood ? 'food' : ''} ${isPowerUp ? 'power-up' : ''} ${isBomb ? 'bomb' : ''}`}
                 />
               );
             })}
