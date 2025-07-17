@@ -84,10 +84,18 @@ const SnakeGame: React.FC = () => {
         return currentSnake;
       }
 
-      // Check bomb collision (even when invincible)
-      if (bombs.some(bomb => bomb.x === head.x && bomb.y === head.y)) {
-        setGameOver(true);
-        return currentSnake;
+      // Check bomb collision
+      const collidedBombIndex = bombs.findIndex(bomb => bomb.x === head.x && bomb.y === head.y);
+      if (collidedBombIndex !== -1) {
+        if (isInvincible) {
+          // When invincible, collect bomb for bonus points
+          setScore(prevScore => prevScore + 5);
+          setBombs(prevBombs => prevBombs.filter((_, index) => index !== collidedBombIndex));
+        } else {
+          // When not invincible, game over
+          setGameOver(true);
+          return currentSnake;
+        }
       }
 
       newSnake.unshift(head);
@@ -141,15 +149,19 @@ const SnakeGame: React.FC = () => {
 
       switch (e.key) {
         case 'ArrowUp':
+          e.preventDefault();
           if (direction !== 'DOWN') setDirection('UP');
           break;
         case 'ArrowDown':
+          e.preventDefault();
           if (direction !== 'UP') setDirection('DOWN');
           break;
         case 'ArrowLeft':
+          e.preventDefault();
           if (direction !== 'RIGHT') setDirection('LEFT');
           break;
         case 'ArrowRight':
+          e.preventDefault();
           if (direction !== 'LEFT') setDirection('RIGHT');
           break;
       }
