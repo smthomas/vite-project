@@ -11,6 +11,7 @@ const SPEED_INCREMENT = 5;
 const SnakeGame: React.FC = () => {
   const [snake, setSnake] = useState<Position[]>([{ x: 10, y: 10 }]);
   const [food, setFood] = useState<Position>({ x: 15, y: 15 });
+  const [bombs, setBombs] = useState<Position[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
@@ -25,9 +26,27 @@ const SnakeGame: React.FC = () => {
         x: Math.floor(Math.random() * GRID_SIZE),
         y: Math.floor(Math.random() * GRID_SIZE),
       };
-    } while (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y));
+    } while (
+      snake.some(segment => segment.x === newFood.x && segment.y === newFood.y) ||
+      bombs.some(bomb => bomb.x === newFood.x && bomb.y === newFood.y)
+    );
     return newFood;
-  }, [snake]);
+  }, [snake, bombs]);
+
+  const generateRandomBomb = useCallback((): Position => {
+    let newBomb: Position;
+    do {
+      newBomb = {
+        x: Math.floor(Math.random() * GRID_SIZE),
+        y: Math.floor(Math.random() * GRID_SIZE),
+      };
+    } while (
+      snake.some(segment => segment.x === newBomb.x && segment.y === newBomb.y) ||
+      (food.x === newBomb.x && food.y === newBomb.y) ||
+      bombs.some(bomb => bomb.x === newBomb.x && bomb.y === newBomb.y)
+    );
+    return newBomb;
+  }, [snake, food, bombs]);
 
   const moveSnake = useCallback(() => {
     if (gameOver || isPaused || !hasStarted) return;
@@ -63,12 +82,23 @@ const SnakeGame: React.FC = () => {
         return currentSnake;
       }
 
+      // Check bomb collision
+      if (bombs.some(bomb => bomb.x === head.x && bomb.y === head.y)) {
+        setGameOver(true);
+        return currentSnake;
+      }
+
       newSnake.unshift(head);
 
       // Check food collision
       if (head.x === food.x && head.y === food.y) {
         setScore(prevScore => prevScore + 10);
         setFood(generateRandomFood());
+        
+        // Add a new bomb every 30 points
+        if ((score + 10) % 30 === 0) {
+          setBombs(prevBombs => [...prevBombs, generateRandomBomb()]);
+        }
         
         // Increase difficulty every 50 points
         if ((score + 10) % 50 === 0) {
@@ -80,7 +110,7 @@ const SnakeGame: React.FC = () => {
 
       return newSnake;
     });
-  }, [direction, food, gameOver, isPaused, hasStarted, score, generateRandomFood]);
+  }, [direction, food, gameOver, isPaused, hasStarted, score, generateRandomFood, generateRandomBomb, bombs]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -123,6 +153,7 @@ const SnakeGame: React.FC = () => {
   const resetGame = () => {
     setSnake([{ x: 10, y: 10 }]);
     setFood({ x: 15, y: 15 });
+    setBombs([]);
     setDirection('RIGHT');
     setGameOver(false);
     setScore(0);
@@ -148,11 +179,12 @@ const SnakeGame: React.FC = () => {
               const isSnakeHead = snake[0].x === col && snake[0].y === row;
               const isSnakeBody = snake.slice(1).some(segment => segment.x === col && segment.y === row);
               const isFood = food.x === col && food.y === row;
+              const isBomb = bombs.some(bomb => bomb.x === col && bomb.y === row);
               
               return (
                 <div
                   key={`${row}-${col}`}
-                  className={`cell ${isSnakeHead ? 'snake-head' : ''} ${isSnakeBody ? 'snake-body' : ''} ${isFood ? 'food' : ''}`}
+                  className={`cell ${isSnakeHead ? 'snake-head' : ''} ${isSnakeBody ? 'snake-body' : ''} ${isFood ? 'food' : ''} ${isBomb ? 'bomb' : ''}`}
                 />
               );
             })}
