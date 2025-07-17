@@ -1,0 +1,30 @@
+.game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.board {
+  display: grid;
+  width: 400px;
+  height: 400px;
+  background-color: var(--board-bg);
+  border: 2px solid var(--border-color);
+}
+
+.cell {
+  border: 1px solid var(--border-color);
+}
+
+.cell.snake {
+  background-color: var(--snake-color);
+}
+
+.cell.food {
+  background-color: var(--food-color);
+}
+
+.score {
+  font-size: 1.2rem;
+}
