@@ -119,6 +119,22 @@
   }
 }
 
+.bomb {
+  background-color: #333;
+  border-radius: 50%;
+  position: relative;
+  overflow: visible;
+}
+
+.bomb::before {
+  content: '💣';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+}
+
 .game-overlay {
   position: absolute;
   top: 50%;

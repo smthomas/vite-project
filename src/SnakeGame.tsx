@@ -14,6 +14,7 @@ const SnakeGame: React.FC = () => {
   const [powerUp, setPowerUp] = useState<Position | null>(null);
   const [isInvincible, setIsInvincible] = useState(false);
   const [invincibilityTimer, setInvincibilityTimer] = useState(0);
+  const [bombs, setBombs] = useState<Position[]>([]);
   const [direction, setDirection] = useState<Direction>('RIGHT');
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
@@ -33,15 +34,21 @@ const SnakeGame: React.FC = () => {
   }, []);
 
   const generateRandomFood = useCallback((): Position => {
-    const excludePositions = [...snake];
+    const excludePositions = [...snake, ...bombs];
     if (powerUp) excludePositions.push(powerUp);
     return generateRandomPosition(excludePositions);
-  }, [snake, powerUp, generateRandomPosition]);
+  }, [snake, powerUp, bombs, generateRandomPosition]);
 
   const generateRandomPowerUp = useCallback((): Position => {
-    const excludePositions = [...snake, food];
+    const excludePositions = [...snake, food, ...bombs];
     return generateRandomPosition(excludePositions);
-  }, [snake, food, generateRandomPosition]);
+  }, [snake, food, bombs, generateRandomPosition]);
+
+  const generateRandomBomb = useCallback((): Position => {
+    const excludePositions = [...snake, food, ...bombs];
+    if (powerUp) excludePositions.push(powerUp);
+    return generateRandomPosition(excludePositions);
+  }, [snake, food, bombs, powerUp, generateRandomPosition]);
 
   const moveSnake = useCallback(() => {
     if (gameOver || isPaused || !hasStarted) return;
@@ -77,6 +84,12 @@ const SnakeGame: React.FC = () => {
         return currentSnake;
       }
 
+      // Check bomb collision (even when invincible)
+      if (bombs.some(bomb => bomb.x === head.x && bomb.y === head.y)) {
+        setGameOver(true);
+        return currentSnake;
+      }
+
       newSnake.unshift(head);
 
       // Check food collision
@@ -87,6 +100,11 @@ const SnakeGame: React.FC = () => {
         // Spawn power-up randomly (20% chance)
         if (!powerUp && Math.random() < 0.2) {
           setPowerUp(generateRandomPowerUp());
+        }
+        
+        // Add a new bomb every 30 points
+        if ((score + 10) % 30 === 0) {
+          setBombs(prevBombs => [...prevBombs, generateRandomBomb()]);
         }
         
         // Increase difficulty every 50 points
@@ -106,7 +124,7 @@ const SnakeGame: React.FC = () => {
 
       return newSnake;
     });
-  }, [direction, food, powerUp, gameOver, isPaused, hasStarted, score, isInvincible, generateRandomFood, generateRandomPowerUp]);
+  }, [direction, food, powerUp, gameOver, isPaused, hasStarted, score, isInvincible, generateRandomFood, generateRandomPowerUp, generateRandomBomb, bombs]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -164,6 +182,7 @@ const SnakeGame: React.FC = () => {
     setPowerUp(null);
     setIsInvincible(false);
     setInvincibilityTimer(0);
+    setBombs([]);
     setDirection('RIGHT');
     setGameOver(false);
     setScore(0);
@@ -191,11 +210,12 @@ const SnakeGame: React.FC = () => {
               const isSnakeBody = snake.slice(1).some(segment => segment.x === col && segment.y === row);
               const isFood = food.x === col && food.y === row;
               const isPowerUp = powerUp && powerUp.x === col && powerUp.y === row;
+              const isBomb = bombs.some(bomb => bomb.x === col && bomb.y === row);
               
               return (
                 <div
                   key={`${row}-${col}`}
-                  className={`cell ${isSnakeHead ? `snake-head ${isInvincible ? 'invincible' : ''}` : ''} ${isSnakeBody ? `snake-body ${isInvincible ? 'invincible' : ''}` : ''} ${isFood ? 'food' : ''} ${isPowerUp ? 'power-up' : ''}`}
+                  className={`cell ${isSnakeHead ? `snake-head ${isInvincible ? 'invincible' : ''}` : ''} ${isSnakeBody ? `snake-body ${isInvincible ? 'invincible' : ''}` : ''} ${isFood ? 'food' : ''} ${isPowerUp ? 'power-up' : ''} ${isBomb ? 'bomb' : ''}`}
                 />
               );
             })}
